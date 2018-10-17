@@ -81,11 +81,9 @@ public class DAO {
                 // Requete sql a parametre pour la création d'une facture => table INVOICE
                 String sqlIstInvoice = "INSERT INTO INVOICE (CustomerID) VALUES (?)";
                 // Requete sql pour modifier la table invoice pour ajouter le prix de la commande
-                String sqlUpdInvoice = "UPDATE INVOICE SET Total=? WHERE ID=?";
+                String sqlUpdInvoice = "UPDATE INVOICE SET CustomerID=? WHERE ID=?";
                 // Requete sql a parametre pour l'ajout dans la liste d'item de la facture => table ITEM
                 String sqlIstItems = "INSERT INTO ITEM (InvoiceID, Item, ProductID, Quantity, Cost) VALUES(?,?,?,?,?)";
-                // On calcul le cout total d'un facture
-                String sqlCostItem = "SELECT Cost FROM ITEM WHERE InvoiceID = ?";
                 // On récupere le prix d'un produit
                 String sqlPriceProdu = "SELECT Price FROM PRODUCT WHERE ID = ?";
 
@@ -93,10 +91,10 @@ public class DAO {
                 int cpt = 0;
                 // Clé primaire de invoice
                 int invoiceKey = 0;
-                // Cout total d'une facture
-                float totalInvoice = 0;
                 // Cout unitaire d'un produit
                 float priceProductUnity = 0;
+                
+                int quantitiesProduct = 0;
                 
                 // EXCEPTION
                 String mess1 = "Produit Inconnu";
@@ -108,7 +106,6 @@ public class DAO {
                       PreparedStatement stmIstInvoice = connection.prepareStatement(sqlIstInvoice);
                       PreparedStatement stmIstItems = connection.prepareStatement(sqlIstItems);
                       PreparedStatement stmUpdInvoice = connection.prepareStatement(sqlUpdInvoice);
-                      PreparedStatement stmCostItems = connection.prepareStatement(sqlCostItem);
                       PreparedStatement stmPriceProduct = connection.prepareStatement(sqlPriceProdu)){
                       
                     // On verifie si le tableau de productsID a la meme taille que le tableau quantite
@@ -142,7 +139,7 @@ public class DAO {
                         //Pour chaque produits on créer une ligne lié a la facture
                         for (;cpt < productIDs.length;cpt++){
                             int productId = productIDs[cpt];
-                            int quantitiesProduct = quantities[cpt];
+                            quantitiesProduct = quantities[cpt];
                             
                             // On récuperer le prix du produit
                             stmPriceProduct.setInt(1, productId);
@@ -156,24 +153,18 @@ public class DAO {
                             stmIstItems.setInt(2, cpt);
                             stmIstItems.setInt(3, productId); 
                             stmIstItems.setInt(4,quantitiesProduct);
-                            stmIstItems.setFloat(5,((priceProductUnity)*quantitiesProduct));
-                            
+                            //stmIstItems.setFloat(5,((priceProductUnity)*quantitiesProduct)); ==> N UTILISE PAS LE TRIGGER
+                            stmIstItems.setFloat(5,priceProductUnity);
                             // On execute la requete
                             stmIstItems.executeUpdate();
-                        }
-                  
-                        // On récupere le total pour le mettre dans la facture
-                        stmCostItems.setInt(1,invoiceKey);
-                        try (ResultSet rs = stmCostItems.executeQuery()) {
-                            while(rs.next()){ // tant qu'on a des résultat pour on les additionne au total
-                                totalInvoice += rs.getFloat("Cost");
-                            }
-                                               
+                        }                      
                         // On récuperer les valeur pour les mettre dans l'update
-                        stmUpdInvoice.setDouble(1, totalInvoice);
+                        // ==> CODE A CHANGER SI ON SE SERT PAS DU TRIGGER
+                        //On remet a jour la facture du client avec son id pour utiliser le trigger du total
+                        stmUpdInvoice.setInt(1, customerKey);
                         stmUpdInvoice.setInt(2, invoiceKey);
                         stmUpdInvoice.executeUpdate();
-                        }                 
+                                       
                     } else {
                        throw new Exception(mess3);
                     }                  

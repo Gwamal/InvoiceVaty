@@ -77,10 +77,112 @@ public class DAO {
 	 * @throws java.lang.Exception si la transaction a échoué
 	 */
 	public void createInvoice(CustomerEntity customer, int[] productIDs, int[] quantities)
-		throws Exception {
-		throw new UnsupportedOperationException("Pas encore implémenté");
-	}
+                    throws Exception {
+                // Requete sql a parametre pour la création d'une facture => table INVOICE
+                String sqlIstInvoice = "INSERT INTO INVOICE (CustomerID) VALUES (?)";
+                // Requete sql pour modifier la table invoice pour ajouter le prix de la commande
+                String sqlUpdInvoice = "UPDATE INVOICE SET Total=? WHERE ID=?";
+                // Requete sql a parametre pour l'ajout dans la liste d'item de la facture => table ITEM
+                String sqlIstItems = "INSERT INTO ITEM (InvoiceID, Item, ProductID, Quantity, Cost) VALUES(?,?,?,?,?)";
+                // On calcul le cout total d'un facture
+                String sqlCostItem = "SELECT Cost FROM ITEM WHERE InvoiceID = ?";
+                // On récupere le prix d'un produit
+                String sqlPriceProdu = "SELECT Price FROM PRODUCT WHERE ID = ?";
 
+                // Compteur pour le nombre de ligne a ajouter
+                int cpt = 0;
+                // Clé primaire de invoice
+                int invoiceKey = 0;
+                // Cout total d'une facture
+                float totalInvoice = 0;
+                // Cout unitaire d'un produit
+                float priceProductUnity = 0;
+                
+                // EXCEPTION
+                String mess1 = "Produit Inconnu";
+                String mess2 = "Quantite Incorrect";
+                String mess3 = "Tableau taille différente";
+                
+                //Connection a la bd => utilisation d'un try with ressources
+                try(Connection connection = myDataSource.getConnection();
+                      PreparedStatement stmIstInvoice = connection.prepareStatement(sqlIstInvoice);
+                      PreparedStatement stmIstItems = connection.prepareStatement(sqlIstItems);
+                      PreparedStatement stmUpdInvoice = connection.prepareStatement(sqlUpdInvoice);
+                      PreparedStatement stmCostItems = connection.prepareStatement(sqlCostItem);
+                      PreparedStatement stmPriceProduct = connection.prepareStatement(sqlPriceProdu)){
+                      
+                    // On verifie si le tableau de productsID a la meme taille que le tableau quantite
+                    if (productIDs.length==quantities.length){
+                        // Si un produit est introuvable dans la table on lance une erreur
+                        for (int i = 0; i < productIDs.length; i ++){
+                            if (!findProduct(productIDs[i])){
+                                throw new Exception(mess1);
+                            }   
+                        }
+                        // Si une quantite de produit est négatif ou equal a zero on lance une erreur
+                        for (int i = 0; i < quantities.length; i++){
+                            if (quantities[i] <= 0) {
+                                throw new Exception(mess2);
+                            }   
+                        }
+                        
+                        // Toute les valeur sont correcte dans les deux tableaux
+                        // On récupere l'id du client
+                        int customerKey = customer.getCustomerId();
+                        // on crée une nouvelle facture (invoice) sans la prix total
+                        stmIstInvoice.setInt(1,customerKey);
+                        stmIstInvoice.executeUpdate();
+                        
+                        // On récupere la derniere clé autogénérer de InvoiceID
+                        ResultSet generatedInvoiceKey = stmIstInvoice.getGeneratedKeys();
+                        while(generatedInvoiceKey.next()){
+                            invoiceKey = generatedInvoiceKey.getInt(1);
+                        }
+                        
+                        //Pour chaque produits on créer une ligne lié a la facture
+                        for (;cpt < productIDs.length;cpt++){
+                            int productId = productIDs[cpt];
+                            int quantitiesProduct = quantities[cpt];
+                            
+                            // On récuperer le prix du produit
+                            stmPriceProduct.setInt(1, productId);
+                            ResultSet rsPrd = stmPriceProduct.executeQuery();
+                            if (rsPrd.next()){
+                                priceProductUnity = rsPrd.getFloat("Price");
+                            }
+                           
+                            // Une des clé primaire de Item
+                            stmIstItems.setInt(1, invoiceKey);
+                            stmIstItems.setInt(2, cpt);
+                            stmIstItems.setInt(3, productId); 
+                            stmIstItems.setInt(4,quantitiesProduct);
+                            stmIstItems.setFloat(5,((priceProductUnity)*quantitiesProduct));
+                            
+                            // On execute la requete
+                            stmIstItems.executeUpdate();
+                        }
+                  
+                        // On récupere le total pour le mettre dans la facture
+                        stmCostItems.setInt(1,invoiceKey);
+                        try (ResultSet rs = stmCostItems.executeQuery()) {
+                            while(rs.next()){ // tant qu'on a des résultat pour on les additionne au total
+                                totalInvoice += rs.getFloat("Cost");
+                            }
+                                               
+                        // On récuperer les valeur pour les mettre dans l'update
+                        stmUpdInvoice.setDouble(1, totalInvoice);
+                        stmUpdInvoice.setInt(2, invoiceKey);
+                        stmUpdInvoice.executeUpdate();
+                        }                 
+                    } else {
+                       throw new Exception(mess3);
+                    }                  
+                }catch(Exception ex){
+                    throw new Exception(ex.getMessage());
+                }
+                
+        }
+        
 	/**
 	 *
 	 * @return le nombre d'enregistrements dans la table CUSTOMER
@@ -122,6 +224,30 @@ public class DAO {
 		return result;
 	}
 
+        /**
+	 * Trouver un produit à partir de sa clé
+	 *
+	 * @param ID la clé du PRODUCT à rechercher
+	 * @return un boolean si on trouve un produit correspondant a la clé
+	 * @throws SQLException
+	 */
+	boolean findProduct(int ID) throws SQLException {
+		boolean result = false;
+
+		String sql = "SELECT * FROM Product WHERE ID = ?";
+		try (Connection connection = myDataSource.getConnection();
+			PreparedStatement stmt = connection.prepareStatement(sql)) {
+			stmt.setInt(1, ID);
+
+			ResultSet rs = stmt.executeQuery();
+                        // Si on trouve au moins une ligne correspondant au produit on renvoie vrai
+			if (rs.next()) {
+				result = true;
+			}
+		}
+		return result;
+	}
+        
 	/**
 	 * Trouver un Customer à partir de sa clé
 	 *

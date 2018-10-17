@@ -101,7 +101,7 @@ public class DAO {
                 String mess2 = "Quantite Incorrect";
                 String mess3 = "Tableau taille différente";
                 
-                //Connection a la bd => utilisation d'un try with ressources
+                //Connection a la bd => utilisation du try with ressources
                 try(Connection connection = myDataSource.getConnection();
                       PreparedStatement stmIstInvoice = connection.prepareStatement(sqlIstInvoice);
                       PreparedStatement stmIstItems = connection.prepareStatement(sqlIstItems);
